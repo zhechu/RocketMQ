@@ -402,6 +402,10 @@ public class RouteInfoManager {
         }
     }
 
+    /**
+     * 调用RouterInfoManager的方法，从路由表topicQueueTable、brokerAddrTable、filterServerTable中分别填充TopicRouteData中
+     * 的List<QueueData>、List<BrokerData>和filterServer地址表
+     */
     public TopicRouteData pickupTopicRouteData(final String topic) {
         TopicRouteData topicRouteData = new TopicRouteData();
         boolean foundQueueData = false;
