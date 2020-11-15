@@ -176,12 +176,17 @@ public class DefaultMQProducerImpl implements MQProducerInner {
 
                 this.checkConfig();
 
+                // 检查productGroup是否符合要求；并改变生产者的instanceName为进程ID
                 if (!this.defaultMQProducer.getProducerGroup().equals(MixAll.CLIENT_INNER_PRODUCER_GROUP)) {
                     this.defaultMQProducer.changeInstanceNameToPID();
                 }
 
+                // 创建MQClientInstance实例。整个JVM实例中只存在一个MQClientManager实例，维护一个MQClientInstance缓存
+                // 表ConcurrentMap<String/*clientId*/,MQClientInstance>factoryTable=newConcurrentHashMap<String,MQClientInstance>(),
+                // 也就是同一个clientId只会创建一个MQClientInstance
                 this.mQClientFactory = MQClientManager.getInstance().getAndCreateMQClientInstance(this.defaultMQProducer, rpcHook);
 
+                // 向MQClientInstance注册，将当前生产者加入到MQClientInstance管理中，方便后续调用网络请求、进行心跳检测等
                 boolean registerOK = mQClientFactory.registerProducer(this.defaultMQProducer.getProducerGroup(), this);
                 if (!registerOK) {
                     this.serviceState = ServiceState.CREATE_JUST;
@@ -211,6 +216,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 break;
         }
 
+        // 向所有Broker发送心跳
         this.mQClientFactory.sendHeartbeatToAllBrokerWithLock();
     }
 
