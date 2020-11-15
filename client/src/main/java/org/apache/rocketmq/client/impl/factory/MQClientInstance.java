@@ -178,6 +178,7 @@ public class MQClientInstance {
             List<QueueData> qds = route.getQueueDatas();
             Collections.sort(qds);
             for (QueueData qd : qds) {
+                // 循环遍历路由信息的QueueData信息，如果队列没有写权限，则继续遍历下一个QueueData
                 if (PermName.isWriteable(qd.getPerm())) {
                     BrokerData brokerData = null;
                     for (BrokerData bd : route.getBrokerDatas()) {
