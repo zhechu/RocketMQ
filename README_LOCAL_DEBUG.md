@@ -30,6 +30,12 @@ ROCKETMQ_HOME=/Users/yuwangling/IdeaProjects/rocketmq
 
 前置条件：ROCKETMQ_HOME 环境变量配置
 
+配置
+
+是否支持顺序消息：orderMessageEnable，默认为 false，不支持
+
+查看启动加载的配置：启动时加上 -p 参数，表示只打印加载的配置，但不启动
+
 ### 启动 broker
 
 前置条件
@@ -39,3 +45,4 @@ ROCKETMQ_HOME=/Users/yuwangling/IdeaProjects/rocketmq
 启动 broker 需指定配置文件
 -c /Users/yuwangling/IdeaProjects/rocketmq/conf/broker.conf
 
+Broker中Topic默认存储在${user.home}/store/confg/topic.json中

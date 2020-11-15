@@ -21,10 +21,25 @@
 package org.apache.rocketmq.common.protocol.route;
 
 public class QueueData implements Comparable<QueueData> {
+    /**
+     * Broker名称，可通过 broker.conf 的 brokerName 配置项配置
+     */
     private String brokerName;
+    /**
+     * 读队列数
+     */
     private int readQueueNums;
+    /**
+     * 写队列数
+     */
     private int writeQueueNums;
+    /**
+     * 读写权限，参考 {@link org.apache.rocketmq.common.constant.PermName}
+     */
     private int perm;
+    /**
+     * topic同步标记，参考 {@link org.apache.rocketmq.common.sysflag.TopicSysFlag}
+     */
     private int topicSynFlag;
 
     public int getReadQueueNums() {
