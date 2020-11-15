@@ -99,6 +99,9 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
     class FaultItem implements Comparable<FaultItem> {
         private final String name;
         private volatile long currentLatency;
+        /**
+         * 当前系统时间加上需要规避的时长。startTimeStamp是判断broker当前是否可用的直接依据
+         */
         private volatile long startTimestamp;
 
         public FaultItem(final String name) {

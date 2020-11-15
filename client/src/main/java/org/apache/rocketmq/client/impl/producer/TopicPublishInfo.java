@@ -78,8 +78,20 @@ public class TopicPublishInfo {
         this.haveTopicRouterInfo = haveTopicRouterInfo;
     }
 
+    /**
+     * 该算法在一次消息发送过程中能成功规避故障的Broker，但如果Broker宕机，由于路由算法中的消息队列是按Broker排序的，
+     * 如果上一次根据路由算法选择的是宕机的Broker的第一个队列，那么随后的下次选择的是宕机Broker的第二个队列，消息发送
+     * 很有可能会失败，再次引发重试，带来不必要的性能损耗，那么有什么方法在一次消息发送失败后，暂时将该Broker排除在消息
+     * 队列选择范围外呢？或许有朋友会问，Broker不可用后，路由信息中为什么还会包含该Broker的路由信息呢？
+     * 其实这不难解释：首先，NameServer检测Broker是否可用是有延迟的，最短为一次心跳检测间隔（10s）；
+     * 其次，NameServer不会检测到Broker宕机后马上推送消息给消息生产者，而是消息生产者每隔30s更新一次路由信息，
+     * 所以消息生产者最快感知Broker最新的路由信息也需要30s。如果能引入一种机制，在Broker宕机期间，如果一次消息发送失败后，
+     * 可以将该Broker暂时排除在消息队列的选择范围中
+     */
     public MessageQueue selectOneMessageQueue(final String lastBrokerName) {
+        // 上一次选择的执行发送消息失败的Broker
         if (lastBrokerName == null) {
+            // 第一次执行消息队列选择时，lastBrokerName为null
             return selectOneMessageQueue();
         } else {
             int index = this.sendWhichQueue.getAndIncrement();
