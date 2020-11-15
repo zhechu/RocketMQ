@@ -457,6 +457,11 @@ public class RouteInfoManager {
         return null;
     }
 
+    /**
+     * NameServer会每隔10s扫描brokerLiveTable状态表，如果BrokerLive的lastUpdateTimestamp的时间戳距当前时间超过120s，
+     * 则认为Broker失效，移除该Broker，关闭与Broker连接，并同时更新topicQueueTable、brokerAddrTable、brokerLiveTable、
+     * filterServerTable
+     */
     public void scanNotActiveBroker() {
         Iterator<Entry<String, BrokerLiveInfo>> it = this.brokerLiveTable.entrySet().iterator();
         while (it.hasNext()) {
@@ -536,6 +541,9 @@ public class RouteInfoManager {
                         }
                     }
 
+                    // 维护brokerAddrTable。遍历从HashMap<String/*brokerName*/,BrokerData>brokerAddrTable,
+                    // 从BrokerData的HashMap<Long/*brokerId*/,String/*brokeraddress*/>brokerAddrs中，找到具体的Broker，
+                    // 从BrokerData中移除，如果移除后在BrokerData中不再包含其他Broker，则在brokerAddrTable中移除该brokerName对应的条目
                     if (brokerNameFound != null && removeBrokerName) {
                         Iterator<Entry<String, Set<String>>> it = this.clusterAddrTable.entrySet().iterator();
                         while (it.hasNext()) {
@@ -558,6 +566,8 @@ public class RouteInfoManager {
                         }
                     }
 
+                    // 根据BrokerName，从clusterAddrTable中找到Broker并从集群中移除。如果移除后，集群中不包含任何Broker，
+                    // 则将该集群从clusterAddrTable中移除
                     if (removeBrokerName) {
                         Iterator<Entry<String, List<QueueData>>> itTopicQueueTable =
                             this.topicQueueTable.entrySet().iterator();

@@ -861,7 +861,7 @@ public class BrokerController {
 
         this.registerBrokerAll(true, false, true);
 
-        // Broker端每1分钟发送一次心跳包
+        // Broker端每30秒发送一次心跳包
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
