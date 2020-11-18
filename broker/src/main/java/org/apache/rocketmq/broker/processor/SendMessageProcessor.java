@@ -336,6 +336,8 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
         msgInner.setTopic(requestHeader.getTopic());
         msgInner.setQueueId(queueIdInt);
 
+        // 如果消息重试次数超过允许的最大重试次数，消息将进入到DLD延迟队列
+        // 延迟队列主题：%DLQ%+消费组名
         if (!handleRetryAndDLQ(requestHeader, response, request, msgInner, topicConfig)) {
             return response;
         }
@@ -361,6 +363,15 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             }
             putMessageResult = this.brokerController.getTransactionalMessageService().prepareMessage(msgInner);
         } else {
+            // 在NameServer端存储主题的配置信息，默认路径：${ROCKET_HOME}/store/config/topic.json。
+            // 下面是主题存储信息
+            // order：是否是顺序消息；
+            // perm：权限码；
+            // readQueueNums：读队列数量；
+            // writeQueueNums：写队列数量；
+            // topicName：主题名称；
+            // topicSysFlag：topicFlag，当前版本暂为保留；
+            // topicFilterType：主题过滤方式，当前版本仅支持SINGLE_TAG
             putMessageResult = this.brokerController.getMessageStore().putMessage(msgInner);
         }
 

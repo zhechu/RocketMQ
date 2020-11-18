@@ -694,6 +694,20 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         }
     }
 
+    /**
+     * 发送消息
+     * @param msg 待发送消息
+     * @param mq 消息将发送到该消息队列上
+     * @param communicationMode 消息发送模式，SYNC、ASYNC、ONEWAY
+     * @param sendCallback 异步消息回调函数
+     * @param topicPublishInfo 主题路由信息
+     * @param timeout 消息发送超时时间，单位：毫秒
+     * @return 发送结果
+     * @throws MQClientException
+     * @throws RemotingException
+     * @throws MQBrokerException
+     * @throws InterruptedException
+     */
     private SendResult sendKernelImpl(final Message msg,
                                       final MessageQueue mq,
                                       final CommunicationMode communicationMode,
@@ -701,6 +715,10 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                                       final TopicPublishInfo topicPublishInfo,
                                       final long timeout) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
         long beginStartTime = System.currentTimeMillis();
+
+        // 根据MessageQueue获取Broker的网络地址。如果MQClientInstance的brokerAddrTable未缓存该Broker的信息，
+        // 则从NameServer主动更新一下topic的路由信息。如果路由更新后还是找不到Broker信息，则抛出MQClientException，
+        // 提示Broker不存在
         String brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
         if (null == brokerAddr) {
             tryToFindTopicPublishInfo(mq.getTopic());
@@ -715,6 +733,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             try {
                 //for MessageBatch,ID has been set in the generating process
                 if (!(msg instanceof MessageBatch)) {
+                    // 为消息分配全局唯一ID
                     MessageClientIDSetter.setUniqID(msg);
                 }
 
@@ -726,11 +745,14 @@ public class DefaultMQProducerImpl implements MQProducerInner {
 
                 int sysFlag = 0;
                 boolean msgBodyCompressed = false;
+                // 如果消息体默认超过4K（compressMsgBodyOverHowmuch），会对消息体采用zip压缩，
+                // 并设置消息的系统标记为MessageSysFlag.COMPRESSED_FLAG
                 if (this.tryToCompressMessage(msg)) {
                     sysFlag |= MessageSysFlag.COMPRESSED_FLAG;
                     msgBodyCompressed = true;
                 }
 
+                // 如果是事务Prepared消息，则设置消息的系统标记为MessageSysFlag.TRANSACTION_PREPARED_TYPE
                 final String tranMsg = msg.getProperty(MessageConst.PROPERTY_TRANSACTION_PREPARED);
                 if (tranMsg != null && Boolean.parseBoolean(tranMsg)) {
                     sysFlag |= MessageSysFlag.TRANSACTION_PREPARED_TYPE;
@@ -748,6 +770,8 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     this.executeCheckForbiddenHook(checkForbiddenContext);
                 }
 
+                // 如果注册了消息发送钩子函数，则执行消息发送之前的增强逻辑。
+                // 通过DefaultMQProducerImpl#registerSendMessageHook注册钩子处理类，并且可以注册多个
                 if (this.hasSendMessageHook()) {
                     context = new SendMessageContext();
                     context.setProducer(this);
@@ -769,6 +793,10 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     this.executeSendMessageHookBefore(context);
                 }
 
+                // 构建消息发送请求包
+                // 主要包含如下重要信息：生产者组、主题名称、默认创建主题Key、该主题在单个Broker默认队列数、队列ID（队列序号）、
+                // 消息系统标记（MessageSysFlag）、消息发送时间、消息标记（RocketMQ对消息中的flag不做任何处理，供应用程序使用）、
+                // 消息扩展属性、消息重试次数、是否是批量消息等
                 SendMessageRequestHeader requestHeader = new SendMessageRequestHeader();
                 requestHeader.setProducerGroup(this.defaultMQProducer.getProducerGroup());
                 requestHeader.setTopic(msg.getTopic());
@@ -797,7 +825,13 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 }
 
                 SendResult sendResult = null;
+                // 根据消息发送方式，同步、异步、单向方式进行网络传输
                 switch (communicationMode) {
+                    // 消息异步发送是指消息生产者调用发送的API后，无须阻塞等待消息服务器返回本次消息发送结果，只需要提供一个回调函数，
+                    // 供消息发送客户端在收到响应结果回调。异步方式相比同步方式，消息发送端的发送性能会显著提高，但为了保护消息服务器的负载压力，
+                    // RocketMQ对消息发送的异步消息进行了并发控制，通过参数clientAsyncSemaphoreValue来控制，默认为65535。
+                    // 异步消息发送虽然也可以通过DefaultMQProducer#retryTimesWhenSendAsyncFailed属性来控制消息重试次数，
+                    // 但是重试的调用入口是在收到服务端响应包时进行的，如果出现网络异常、网络超时等将不会重试
                     case ASYNC:
                         Message tmpMessage = msg;
                         boolean messageCloned = false;
@@ -836,6 +870,9 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                             context,
                             this);
                         break;
+                    // 单向发送是指消息生产者调用消息发送的API后，无须等待消息服务器返回本次消息发送结果，并且无须提供回调函数，
+                    // 表示消息发送压根就不关心本次消息发送是否成功，其实现原理与异步消息发送相同，只是消息发送客户端在收到响应
+                    // 结果后什么都不做而已，并且没有重试机制
                     case ONEWAY:
                     case SYNC:
                         long costTimeSync = System.currentTimeMillis() - beginStartTime;
@@ -857,6 +894,8 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                         break;
                 }
 
+                // 如果注册了消息发送钩子函数，执行after逻辑
+                // 注意，就算消息发送过程中发生RemotingException、MQBrokerException、InterruptedException时该方法也会执行
                 if (this.hasSendMessageHook()) {
                     context.setSendResult(sendResult);
                     this.executeSendMessageHookAfter(context);

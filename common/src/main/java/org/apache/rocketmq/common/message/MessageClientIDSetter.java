@@ -32,6 +32,7 @@ public class MessageClientIDSetter {
 
     static {
         LEN = 4 + 2 + 4 + 4 + 2;
+        // IP（4字节）+ PID（2字节，只截取低位2字节部分）+ 类的哈希码（4字节）
         ByteBuffer tempBuffer = ByteBuffer.allocate(10);
         tempBuffer.position(2);
         tempBuffer.putInt(UtilAll.getPid());
@@ -43,6 +44,7 @@ public class MessageClientIDSetter {
         }
         tempBuffer.position(6);
         tempBuffer.putInt(MessageClientIDSetter.class.getClassLoader().hashCode());
+        // 得到的字符串长度是20
         FIX_STRING = UtilAll.bytes2string(tempBuffer.array());
         setStartTime(System.currentTimeMillis());
         COUNTER = new AtomicInteger(0);
