@@ -311,6 +311,10 @@ public class DefaultMessageStore implements MessageStore {
             log.info("[SetReputOffset] maxPhysicalPosInLogicQueue={} clMinOffset={} clMaxOffset={} clConfirmedOffset={}",
                 maxPhysicalPosInLogicQueue, this.commitLog.getMinOffset(), this.commitLog.getMaxOffset(), this.commitLog.getConfirmOffset());
             this.reputMessageService.setReputFromOffset(maxPhysicalPosInLogicQueue);
+            // 消息消费队列文件、消息属性索引文件都是基于CommitLog文件构建的，当消息生产者提交的消息存储在Commitlog文件中，
+            // ConsumeQueue、IndexFile需要及时更新，否则消息无法及时被消费，根据消息属性查找消息也会出现较大延迟。
+            // RocketMQ通过开启一个线程ReputMessageServcie来准实时转发CommitLog文件更新事件，相应的任务处理器根据转发的
+            // 消息及时更新ConsumeQueue、IndexFile文件
             this.reputMessageService.start();
 
             /**
@@ -1490,6 +1494,8 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     public void putMessagePositionInfo(DispatchRequest dispatchRequest) {
+        // 根据消息主题与队列ID，先获取对应的ConumeQueue文件，其逻辑比较简单，因为每一个消息主题对应一个消息消费队列目录，
+        // 然后主题下每一个消息队列对应一个文件夹，然后取出该文件夹最后的ConsumeQueue文件即可
         ConsumeQueue cq = this.findConsumeQueue(dispatchRequest.getTopic(), dispatchRequest.getQueueId());
         cq.putMessagePositionInfoWrapper(dispatchRequest);
     }
@@ -1889,12 +1895,17 @@ public class DefaultMessageStore implements MessageStore {
                     break;
                 }
 
+                // 返回reputFromOffset偏移量开始的全部有效数据（commitlog文件）。然后循环读取每一条消息
                 SelectMappedBufferResult result = DefaultMessageStore.this.commitLog.getData(reputFromOffset);
                 if (result != null) {
                     try {
                         this.reputFromOffset = result.getStartOffset();
 
                         for (int readSize = 0; readSize < result.getSize() && doNext; ) {
+                            // 从result返回的ByteBuffer中循环读取消息，一次读取一条，创建DispatchRequest对象。
+                            // 如果消息长度大于0，则调用doDispatch方法。
+                            // 最终将分别调用CommitLogDispatcherBuildConsumeQueue（构建消息消费队列）、
+                            // CommitLogDispatcherBuildIndex（构建索引文件）
                             DispatchRequest dispatchRequest =
                                 DefaultMessageStore.this.commitLog.checkMessageAndReturnSize(result.getByteBuffer(), false, false);
                             int size = dispatchRequest.getBufferSize() == -1 ? dispatchRequest.getMsgSize() : dispatchRequest.getBufferSize();
@@ -1957,6 +1968,7 @@ public class DefaultMessageStore implements MessageStore {
 
             while (!this.isStopped()) {
                 try {
+                    // 每执行一次任务推送休息1毫秒
                     Thread.sleep(1);
                     this.doReput();
                 } catch (Exception e) {

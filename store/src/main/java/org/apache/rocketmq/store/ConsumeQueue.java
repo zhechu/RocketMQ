@@ -480,6 +480,8 @@ public class ConsumeQueue {
                 }
             }
             this.maxPhysicOffset = offset + size;
+            // 依次将消息偏移量、消息长度、taghashcode写入到ByteBuffer中，并根据consumeQueueOffset计算ConumeQueue中的物理地址，
+            // 将内容追加到ConsumeQueue的内存映射文件中（本操作只追击并不刷盘），ConumeQueue的刷盘方式固定为异步刷盘模式
             return mappedFile.appendMessage(this.byteBufferIndex.array());
         }
         return false;
