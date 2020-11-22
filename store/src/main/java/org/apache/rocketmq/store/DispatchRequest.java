@@ -56,7 +56,7 @@ public class DispatchRequest {
      */
     private final boolean success;
     /**
-     * 消息唯一键
+     * 消息唯一键（客户端生成）
      */
     private final String uniqKey;
 
