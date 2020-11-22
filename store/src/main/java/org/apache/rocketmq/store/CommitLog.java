@@ -41,6 +41,8 @@ import org.apache.rocketmq.store.schedule.ScheduleMessageService;
 
 /**
  * Store all metadata downtime for recovery, data protection reliability
+ * Commitlog文件的存储目录默认为${ROCKET_HOME}/store/commitlog，可以通过在broker配置文件中设置storePathRootDir属性来改变默认路径
+ * commitlog文件默认大小为1G，可通过在broker配置文件中设置mapedFileSizeCommitLog属性来改变默认大小
  */
 public class CommitLog {
     // Message's MAGIC CODE daa320a7
@@ -822,6 +824,10 @@ public class CommitLog {
         return -1;
     }
 
+    /**
+     * 获取当前Commitlog目录最小偏移量，首先获取目录下的第一个文件，如果该文件可用，则返回该文件的起始偏移量，否则返回下一个文件的起始偏移量
+     * @return
+     */
     public long getMinOffset() {
         MappedFile mappedFile = this.mappedFileQueue.getFirstMappedFile();
         if (mappedFile != null) {
@@ -835,6 +841,14 @@ public class CommitLog {
         return -1;
     }
 
+    /**
+     * 根据偏移量与消息长度查找消息
+     * 首先根据偏移找到所在的物理偏移量，然后用offset与文件长度取余得到在文件内的偏移量，从该偏移量读取size长度的内容返回即可
+     * 如果只根据消息偏移查找消息，则首先找到文件内的偏移量，然后尝试读取4个字节获取消息的实际长度，最后读取指定字节即可
+     * @param offset
+     * @param size
+     * @return
+     */
     public SelectMappedBufferResult getMessage(final long offset, final int size) {
         int mappedFileSize = this.defaultMessageStore.getMessageStoreConfig().getMapedFileSizeCommitLog();
         MappedFile mappedFile = this.mappedFileQueue.findMappedFileByOffset(offset, offset == 0);

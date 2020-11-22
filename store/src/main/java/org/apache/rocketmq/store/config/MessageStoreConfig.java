@@ -20,6 +20,19 @@ import java.io.File;
 import org.apache.rocketmq.common.annotation.ImportantField;
 import org.apache.rocketmq.store.ConsumeQueue;
 
+/**
+ * commitlog：消息存储目录
+ * config：运行期间一些配置信息，主要包括下列信息
+ * consumerFilter.json：主题消息过滤信息
+ * consumerOffset.json：集群消费模式消息消费进度
+ * delayOffset.json：延时消息队列拉取进度
+ * subscriptionGroup.json：消息消费组配置信息
+ * topics.json：topic配置属性
+ * consumequeue：消息消费队列存储目录
+ * index：消息索引文件存储目录
+ * abort：如果存在abort文件说明Broker非正常关闭，该文件默认启动时创建，正常退出之前删除
+ * checkpoint：文件检测点，存储commitlog文件最后一次刷盘时间戳、consumequeue最后一次刷盘时间、index索引文件最后一次刷盘时间戳
+ */
 public class MessageStoreConfig {
     //The root directory in which the log data is kept
     @ImportantField

@@ -24,6 +24,13 @@ import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.store.config.StorePathConfigHelper;
 
+/**
+ * ConsumeQueue即为Commitlog文件的索引文件，其构建机制是当消息到达Commitlog文件后，
+ * 由专门的线程产生消息转发任务，从而构建消息消费队列文件与索引文件
+ * 单个ConsumeQueue文件中默认包含30万个条目，单个文件的长度为30w×20字节，
+ * 单个ConsumeQueue文件可以看成是一个ConsumeQueue条目的数组，
+ * 其下标为ConsumeQueue的逻辑偏移量，消息消费进度存储的偏移量即逻辑偏移量
+ */
 public class ConsumeQueue {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
@@ -151,7 +158,13 @@ public class ConsumeQueue {
         }
     }
 
+    /**
+     * 根据消息存储时间查找消息逻辑偏移量
+     * @param timestamp
+     * @return
+     */
     public long getOffsetInQueueByTime(final long timestamp) {
+        // 首先根据时间戳定位到物理文件
         MappedFile mappedFile = this.mappedFileQueue.getMappedFileByTime(timestamp);
         if (mappedFile != null) {
             long offset = 0;
@@ -165,6 +178,7 @@ public class ConsumeQueue {
                 ByteBuffer byteBuffer = sbr.getByteBuffer();
                 high = byteBuffer.limit() - CQ_STORE_UNIT_SIZE;
                 try {
+                    // 采用二分查找来加速检索
                     while (high >= low) {
                         midOffset = (low + high) / (2 * CQ_STORE_UNIT_SIZE) * CQ_STORE_UNIT_SIZE;
                         byteBuffer.position(midOffset);
@@ -483,6 +497,14 @@ public class ConsumeQueue {
         }
     }
 
+    /**
+     * 根据startIndex获取消息消费队列条目。首先startIndex*20得到在consumequeue中的物理偏移量，
+     * 如果该offset小于minLogicOffset，则返回null，说明该消息已被删除；如果大于minLogicOffset，
+     * 则根据偏移量定位到具体的物理文件，然后通过offset与物理文大小取模获取在该文件的偏移量，
+     * 从而从偏移量开始连续读取20个字节即可
+     * @param startIndex
+     * @return
+     */
     public SelectMappedBufferResult getIndexBuffer(final long startIndex) {
         int mappedFileSize = this.mappedFileSize;
         long offset = startIndex * CQ_STORE_UNIT_SIZE;
