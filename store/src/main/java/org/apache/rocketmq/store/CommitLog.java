@@ -165,14 +165,22 @@ public class CommitLog {
         final List<MappedFile> mappedFiles = this.mappedFileQueue.getMappedFiles();
         if (!mappedFiles.isEmpty()) {
             // Began to recover from the last third file
+            // Broker正常停止再重启时，从倒数第三个文件开始进行恢复，如果不足3个文件，则从第一个文件开始恢复。
+            // checkCRCOnRecover参数设置在进行文件恢复时查找消息时是否验证CRC
             int index = mappedFiles.size() - 3;
             if (index < 0)
                 index = 0;
 
             MappedFile mappedFile = mappedFiles.get(index);
             ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
+            // Commitlog文件已确认的物理偏移量 = mappedFile.getFileFromOffset + mappedFileOffset
             long processOffset = mappedFile.getFileFromOffset();
+            // 当前文件已校验通过的offset
             long mappedFileOffset = 0;
+            // 遍历Commitlog文件，每次取出一条消息，如果查找结果为true并且消息的长度大于0表示消息正确，
+            // mappedFileOffset指针向前移动本条消息的长度；如果查找结果为true并且消息的长度等于0，表示已到该文件的末尾，
+            // 如果还有下一个文件，则重置processOffset、mappedFileOffset重复步骤3，
+            // 否则跳出循环；如果查找结构为false，表明该文件未填满所有消息，跳出循环，结束遍历文件
             while (true) {
                 DispatchRequest dispatchRequest = this.checkMessageAndReturnSize(byteBuffer, checkCRCOnRecover);
                 int size = dispatchRequest.getMsgSize();
@@ -204,6 +212,7 @@ public class CommitLog {
                 }
             }
 
+            // 更新MappedFileQueue的flushedWhere与commiteedWhere指针
             processOffset += mappedFileOffset;
             this.mappedFileQueue.setFlushedWhere(processOffset);
             this.mappedFileQueue.setCommittedWhere(processOffset);
