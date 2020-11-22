@@ -420,6 +420,7 @@ public class CommitLog {
         final List<MappedFile> mappedFiles = this.mappedFileQueue.getMappedFiles();
         if (!mappedFiles.isEmpty()) {
             // Looking beginning to recover from which file
+            // 需要从最后一个文件往前走，找到第一个消息存储正常的文件
             int index = mappedFiles.size() - 1;
             MappedFile mappedFile = null;
             for (; index >= 0; index--) {
@@ -495,6 +496,7 @@ public class CommitLog {
             log.warn("The commitlog files are deleted, and delete the consume queue files");
             this.mappedFileQueue.setFlushedWhere(0);
             this.mappedFileQueue.setCommittedWhere(0);
+            // 如果commitlog目录没有消息文件，如果在消息消费队列目录下存在文件，则需要销毁
             this.defaultMessageStore.destroyLogics();
         }
     }
@@ -502,16 +504,22 @@ public class CommitLog {
     private boolean isMappedFileMatchedRecover(final MappedFile mappedFile) {
         ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
 
+        // 首先判断文件的魔数，如果不是MESSAGE_MAGIC_CODE，返回false，表示该文件不符合commitlog消息文件的存储格式
         int magicCode = byteBuffer.getInt(MessageDecoder.MESSAGE_MAGIC_CODE_POSTION);
         if (magicCode != MESSAGE_MAGIC_CODE) {
             return false;
         }
 
+        // 如果文件中第一条消息的存储时间等于0，返回false，说明该消息存储文件中未存储任何消息
         long storeTimestamp = byteBuffer.getLong(MessageDecoder.MESSAGE_STORE_TIMESTAMP_POSTION);
         if (0 == storeTimestamp) {
             return false;
         }
 
+        // 对比文件第一条消息的时间戳与检测点，文件第一条消息的时间戳小于文件检测点说明该文件部分消息是可靠的，则从该文件开始恢复。
+        // 文件检测点中保存了Commitlog文件、消息消费队列（ConsumeQueue）、索引文件（IndexFile）的文件刷盘点，
+        // RocketMQ默认选择这消息文件与消息消费队列这两个文件的时间刷盘点中最小值与消息文件第一消息的时间戳对比，
+        // 如果messageIndexEnable为true，表示索引文件的刷盘时间点也参与计算
         if (this.defaultMessageStore.getMessageStoreConfig().isMessageIndexEnable()
             && this.defaultMessageStore.getMessageStoreConfig().isMessageIndexSafe()) {
             if (storeTimestamp <= this.defaultMessageStore.getStoreCheckpoint().getMinTimestampIndex()) {
