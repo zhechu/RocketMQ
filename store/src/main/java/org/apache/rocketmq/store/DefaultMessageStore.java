@@ -564,6 +564,16 @@ public class DefaultMessageStore implements MessageStore {
         return commitLog;
     }
 
+  /**
+   * 查找消息
+   * @param group 消费组名称
+   * @param topic 主题名称
+   * @param queueId 队列ID
+   * @param offset 待拉取偏移量
+   * @param maxMsgNums 最大拉取消息条数
+   * @param messageFilter 消息过滤器
+   * @return
+   */
     public GetMessageResult getMessage(final String group, final String topic, final int queueId, final long offset,
         final int maxMsgNums,
         final MessageFilter messageFilter) {
@@ -580,29 +590,39 @@ public class DefaultMessageStore implements MessageStore {
         long beginTime = this.getSystemClock().now();
 
         GetMessageStatus status = GetMessageStatus.NO_MESSAGE_IN_QUEUE;
+        // 待查找的队列偏移量
         long nextBeginOffset = offset;
+        // 当前消息队列最小偏移量
         long minOffset = 0;
+        // 当前消息队列最大偏移量
         long maxOffset = 0;
 
         GetMessageResult getResult = new GetMessageResult();
 
+        // 当前commitlog文件最大偏移量
         final long maxOffsetPy = this.commitLog.getMaxOffset();
 
+        // 根据主题名称与队列编号获取消息消费队列
         ConsumeQueue consumeQueue = findConsumeQueue(topic, queueId);
         if (consumeQueue != null) {
             minOffset = consumeQueue.getMinOffsetInQueue();
             maxOffset = consumeQueue.getMaxOffsetInQueue();
 
+            // 消息偏移量异常情况校对下一次拉取偏移量
             if (maxOffset == 0) {
+                // 表示当前消费队列中没有消息，拉取结果：NO_MESSAGE_IN_QUEUE
                 status = GetMessageStatus.NO_MESSAGE_IN_QUEUE;
                 nextBeginOffset = nextOffsetCorrection(offset, 0);
             } else if (offset < minOffset) {
+                // 表示待拉取消息偏移量小于队列的起始偏移量，拉取结果为：OFFSET_TOO_SMALL
                 status = GetMessageStatus.OFFSET_TOO_SMALL;
                 nextBeginOffset = nextOffsetCorrection(offset, minOffset);
             } else if (offset == maxOffset) {
+                // 如果待拉取偏移量等于队列最大偏移量，拉取结果：OFFSET_OVERFLOW_ONE
                 status = GetMessageStatus.OFFSET_OVERFLOW_ONE;
                 nextBeginOffset = nextOffsetCorrection(offset, offset);
             } else if (offset > maxOffset) {
+                // 表示偏移量越界，拉取结果：OFFSET_OVERFLOW_BADLY
                 status = GetMessageStatus.OFFSET_OVERFLOW_BADLY;
                 if (0 == minOffset) {
                     nextBeginOffset = nextOffsetCorrection(offset, minOffset);
@@ -610,6 +630,8 @@ public class DefaultMessageStore implements MessageStore {
                     nextBeginOffset = nextOffsetCorrection(offset, maxOffset);
                 }
             } else {
+                // 如果待拉取偏移量大于minOffset并且小于maxOffset，从当前offset处尝试拉取32条消息，
+                // 根据消息队列偏移量（ConsumeQueue）从commitlog文件中查找消息
                 SelectMappedBufferResult bufferConsumeQueue = consumeQueue.getIndexBuffer(offset);
                 if (bufferConsumeQueue != null) {
                     try {
@@ -1236,6 +1258,13 @@ public class DefaultMessageStore implements MessageStore {
         return logic;
     }
 
+  /**
+   * 如果当前Broker为主节点或offsetCheckInSlave为true，下次拉取偏移量为oldOffset
+   * 如果当前Broker为从节点且offsetCheckInSlave为false，下次拉取偏移量为newOffset
+   * @param oldOffset
+   * @param newOffset
+   * @return
+   */
     private long nextOffsetCorrection(long oldOffset, long newOffset) {
         long nextOffset = oldOffset;
         if (this.getMessageStoreConfig().getBrokerRole() != BrokerRole.SLAVE || this.getMessageStoreConfig().isOffsetCheckInSlave()) {

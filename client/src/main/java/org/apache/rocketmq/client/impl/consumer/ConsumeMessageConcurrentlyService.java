@@ -211,7 +211,9 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
             } catch (RejectedExecutionException e) {
                 this.submitConsumeRequestLater(consumeRequest);
             }
-        } else {
+        }
+        // 大于一个批次承载的消息数，分批消费
+        else {
             for (int total = 0; total < msgs.size(); ) {
                 List<MessageExt> msgThis = new ArrayList<MessageExt>(consumeBatchSize);
                 for (int i = 0; i < consumeBatchSize; i++, total++) {
