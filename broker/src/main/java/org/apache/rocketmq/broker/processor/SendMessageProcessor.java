@@ -116,6 +116,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             this.executeConsumeMessageHookAfter(context);
         }
 
+        // ：获取消费组的订阅配置信息，如果配置信息为空返回配置组信息不存在错误
         SubscriptionGroupConfig subscriptionGroupConfig =
             this.brokerController.getSubscriptionGroupManager().findSubscriptionGroupConfig(requestHeader.getGroup());
         if (null == subscriptionGroupConfig) {
@@ -131,12 +132,14 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             return response;
         }
 
+        // 如果重试队列数量小于1，则直接返回成功，说明该消费组不支持重试
         if (subscriptionGroupConfig.getRetryQueueNums() <= 0) {
             response.setCode(ResponseCode.SUCCESS);
             response.setRemark(null);
             return response;
         }
 
+        // 创建重试主题，重试主题名称：%RETRY%+消费组名称，并从重试队列中随机选择一个队列，并构建TopicConfig主题配置信息
         String newTopic = MixAll.getRetryTopic(requestHeader.getGroup());
         int queueIdInt = Math.abs(this.random.nextInt() % 99999999) % subscriptionGroupConfig.getRetryQueueNums();
 
@@ -168,6 +171,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             return response;
         }
 
+        // 根据消息物理偏移量从commitlog文件中获取消息，同时将消息的主题存入属性中
         final String retryTopic = msgExt.getProperty(MessageConst.PROPERTY_RETRY_TOPIC);
         if (null == retryTopic) {
             MessageAccessor.putProperty(msgExt, MessageConst.PROPERTY_RETRY_TOPIC, msgExt.getTopic());
@@ -181,6 +185,8 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             maxReconsumeTimes = requestHeader.getMaxReconsumeTimes();
         }
 
+        // 设置消息重试次数，如果消息已重试次数超过maxReconsumeTimes，再次改变newTopic主题为DLQ（"%DLQ%"），
+        // 该主题的权限为只写，说明消息一旦进入到DLQ队列中，RocketMQ将不负责再次调度进行消费了，需要人工干预
         if (msgExt.getReconsumeTimes() >= maxReconsumeTimes
             || delayLevel < 0) {
             newTopic = MixAll.getDLQTopic(requestHeader.getGroup());
@@ -203,6 +209,8 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             msgExt.setDelayTimeLevel(delayLevel);
         }
 
+        // 根据原先的消息创建一个新的消息对象，重试消息会拥有自己的唯一消息ID（msgId）并存入到commitlog文件中，
+        // 并不会去更新原先消息，而是会将原先的主题、消息ID存入消息的属性中，主题名称为重试主题，其他属性与原先消息保持相同
         MessageExtBrokerInner msgInner = new MessageExtBrokerInner();
         msgInner.setTopic(newTopic);
         msgInner.setBody(msgExt.getBody());
