@@ -39,13 +39,29 @@ import org.apache.rocketmq.remoting.exception.RemotingException;
  * Local storage implementation
  */
 public class LocalFileOffsetStore implements OffsetStore {
+
+    /**
+     * 消息进度存储目录，可以通过Drocketmq.client.localOffsetStoreDir，如果未指定，则默认为用户主目录/.rocketmq_offsets
+     */
     public final static String LOCAL_OFFSET_STORE_DIR = System.getProperty(
         "rocketmq.client.localOffsetStoreDir",
         System.getProperty("user.home") + File.separator + ".rocketmq_offsets");
     private final static InternalLogger log = ClientLogger.getLog();
+    /**
+     * 消息客户端
+     */
     private final MQClientInstance mQClientFactory;
+    /**
+     * 消息消费组
+     */
     private final String groupName;
+    /**
+     * 消息进度存储文件，LOCAL_OFFSET_STORE_DIR/.rocketmq_offsets/{mQClientFactory.getClientId()}/groupName/offsets.json
+     */
     private final String storePath;
+    /**
+     * 消息消费进度（内存）
+     */
     private ConcurrentMap<MessageQueue, AtomicLong> offsetTable =
         new ConcurrentHashMap<MessageQueue, AtomicLong>();
 

@@ -302,6 +302,7 @@ public class MQClientInstance {
             }
         }, 1000, this.clientConfig.getHeartbeatBrokerInterval(), TimeUnit.MILLISECONDS);
 
+        // 启动一个定时任务，默认每5s持久化消息进度一次，可通过persistConsumerOffsetInterval设置
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
