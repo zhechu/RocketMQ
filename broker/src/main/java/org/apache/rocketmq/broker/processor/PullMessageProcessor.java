@@ -146,6 +146,7 @@ public class PullMessageProcessor implements NettyRequestProcessor {
             return response;
         }
 
+        // 根据主题、消息过滤表达式构建订阅消息实体。如果是不是TAG模式，构建过滤数据ConsumeFilterData
         SubscriptionData subscriptionData = null;
         ConsumerFilterData consumerFilterData = null;
         if (hasSubscriptionFlag) {
@@ -224,7 +225,9 @@ public class PullMessageProcessor implements NettyRequestProcessor {
             return response;
         }
 
-        // 根据订阅信息，构建消息过滤器
+        // 构建消息过滤对象
+        // ExpressionForRetryMessageFilter，支持对重试主题的过滤，
+        // ExpressionMessageFilter，不支持对重试主题的属性过滤，也就是如果是tag模式，执行isMatchedByCommitLog方法将直接返回true
         MessageFilter messageFilter;
         if (this.brokerController.getBrokerConfig().isFilterSupportRetry()) {
             messageFilter = new ExpressionForRetryMessageFilter(subscriptionData, consumerFilterData,

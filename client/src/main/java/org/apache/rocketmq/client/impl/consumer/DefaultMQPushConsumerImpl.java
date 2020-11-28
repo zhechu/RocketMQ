@@ -434,6 +434,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
             }
         }
 
+        // 根据订阅消息构建消息拉取标记，设置subExpression、classFilter等与消息过滤相关信息
         String subExpression = null;
         boolean classFilter = false;
         SubscriptionData sd = this.rebalanceImpl.getSubscriptionInner().get(pullRequest.getMessageQueue().getTopic());
@@ -908,8 +909,19 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         return this.rebalanceImpl.getSubscriptionInner();
     }
 
+    /**
+     * 消息发送者在消息发送时如果设置了消息的tags属性，存储在消息属性中，先存储在CommitLog文件中，
+     * 然后转发到消息消费队列，消息消费队列会用8个字节存储消息tag的hashcode，之所以不直接存储tag字符串，
+     * 是因为将ConumeQueue设计为定长结构，加快消息消费的加载性能。在Broker端拉取消息时，遍历ConsumeQueue，
+     * 只对比消息tag的hashcode，如果匹配则返回，否则忽略该消息。Consume在收到消息后，同样需要先对消息进行过滤，
+     * 只是此时比较的是消息tag的值而不再是hashcode
+     * @param topic
+     * @param subExpression
+     * @throws MQClientException
+     */
     public void subscribe(String topic, String subExpression) throws MQClientException {
         try {
+            // 消费者订阅消息主题与消息过滤表达式。构建订阅信息并加入到RebalanceImpl中，以便RebalanceImpl进行消息队列负载
             SubscriptionData subscriptionData = FilterAPI.buildSubscriptionData(this.defaultMQPushConsumer.getConsumerGroup(),
                 topic, subExpression);
             this.rebalanceImpl.getSubscriptionInner().put(topic, subscriptionData);
