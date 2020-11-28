@@ -315,8 +315,8 @@ public class ScheduleMessageService extends ConfigManager {
                         long nextOffset = offset;
                         int i = 0;
                         ConsumeQueueExt.CqExtUnit cqExtUnit = new ConsumeQueueExt.CqExtUnit();
-                        // 遍历ConsumeQueue，每一个标准ConsumeQueue条目为20个字节。解析出消息的物理偏移量、消息长度、
-                        // 消息taghashcode，为从commitlog加载具体的消息做准备
+                        // 遍历ConsumeQueue，每一个标准ConsumeQueue条目为20个字节。
+                        // 解析出消息的物理偏移量、消息长度、消息taghashcode，为从commitlog加载具体的消息做准备
                         for (; i < bufferCQ.getSize(); i += ConsumeQueue.CQ_STORE_UNIT_SIZE) {
                             long offsetPy = bufferCQ.getByteBuffer().getLong();
                             int sizePy = bufferCQ.getByteBuffer().getInt();
