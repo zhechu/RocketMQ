@@ -238,6 +238,8 @@ public class PullAPIWrapper {
             return this.defaultBrokerId;
         }
 
+        // 原来消息消费拉取线程PullMessageService根据PullRequest请求从主服务器拉取消息后会返回下一次建议拉取的brokerId，
+        // 消息消费者线程在收到消息后，会根据主服务器的建议拉取brokerId来更新pullFromWhichNodeTable
         AtomicLong suggest = this.pullFromWhichNodeTable.get(mq);
         if (suggest != null) {
             return suggest.get();
