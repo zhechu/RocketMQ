@@ -1235,6 +1235,9 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         Validators.checkMessage(msg, this.defaultMQProducer);
 
         SendResult sendResult = null;
+        // 首先为消息添加属性，TRAN_MSG和PGROUP，分别表示消息为prepare消息、消息所属消息生产者组。
+        // 设置消息生产者组的目的是在查询事务消息本地事务状态时，从该生产者组中随机选择一个消息生产者即可，
+        // 然后通过同步调用方式向RocketMQ发送消息
         MessageAccessor.putProperty(msg, MessageConst.PROPERTY_TRANSACTION_PREPARED, "true");
         MessageAccessor.putProperty(msg, MessageConst.PROPERTY_PRODUCER_GROUP, this.defaultMQProducer.getProducerGroup());
         try {
@@ -1246,6 +1249,10 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         LocalTransactionState localTransactionState = LocalTransactionState.UNKNOW;
         Throwable localException = null;
         switch (sendResult.getSendStatus()) {
+            // 如果消息发送成功，则执行TransactionListener#executeLocalTransaction方法，
+            // 该方法的职责是记录事务消息的本地事务状态，
+            // 例如可以通过将消息唯一ID存储在数据中，并且该方法与业务代码处于同一个事务，与业务事务要么一起成功，要么一起失败。
+            // 这里是事务消息设计的关键理念之一，为后续的事务状态回查提供唯一依据
             case SEND_OK: {
                 try {
                     if (sendResult.getTransactionId() != null) {
@@ -1278,6 +1285,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             break;
             case FLUSH_DISK_TIMEOUT:
             case FLUSH_SLAVE_TIMEOUT:
+            // 如果消息发送失败，则设置本次事务状态为LocalTransactionState.ROLLBACK_MESSAGE
             case SLAVE_NOT_AVAILABLE:
                 localTransactionState = LocalTransactionState.ROLLBACK_MESSAGE;
                 break;
@@ -1309,6 +1317,17 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         return send(msg, this.defaultMQProducer.getSendMsgTimeout());
     }
 
+    /**
+     * 根据消息所属的消息队列获取Broker的IP与端口信息，然后发送结束事务命令，
+     * 其关键就是根据本地执行事务的状态分别发送提交、回滚或不作为的命令
+     * @param sendResult
+     * @param localTransactionState
+     * @param localException
+     * @throws RemotingException
+     * @throws MQBrokerException
+     * @throws InterruptedException
+     * @throws UnknownHostException
+     */
     public void endTransaction(
         final SendResult sendResult,
         final LocalTransactionState localTransactionState,

@@ -22,14 +22,24 @@ import org.apache.rocketmq.common.message.Message;
 import org.apache.rocketmq.common.protocol.NamespaceUtil;
 import org.apache.rocketmq.remoting.RPCHook;
 
+/**
+ * RocketMQ通过TransactionalMessageCheckService线程定时去检测RMQ_SYS_TRANS_HALF_TOPIC主题中的消息，回查消息的事务状态。
+ * TransactionalMessageCheckService的检测频率默认为1分钟，可通过在broker.conf文件中设置transactionCheckInterval来改变默认值，单位为毫秒
+ */
 public class TransactionMQProducer extends DefaultMQProducer {
     private TransactionCheckListener transactionCheckListener;
     private int checkThreadPoolMinSize = 1;
     private int checkThreadPoolMaxSize = 1;
     private int checkRequestHoldMax = 2000;
 
+    /**
+     * 事务状态回查异步执行线程池
+     */
     private ExecutorService executorService;
 
+    /**
+     * 事务监听器，主要定义实现本地事务状态执行、本地事务状态回查两个接口
+     */
     private TransactionListener transactionListener;
 
     public TransactionMQProducer() {
